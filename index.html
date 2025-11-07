@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Плитка под кирпич — AR демо</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    .instructions {
+      position: absolute;
+      bottom: 20px;
+      left: 0;
+      width: 100%;
+      text-align: center;
+      color: white;
+      background: rgba(0,0,0,0.6);
+      padding: 10px;
+      font-family: Arial, sans-serif;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+  <div class="instructions">
+    Распечатайте маркер Hiro и наведите на него камеру → увидите плитку в AR!
+  </div>
+
+  <!-- Подключаем AR.js с поддержкой маркеров -->
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+
+  <a-scene
+    vr-mode-ui="enabled: false"
+    arjs="sourceType: webcam; debugUIEnabled: false;"
+  >
+    <!-- Hiro-маркер -->
+    <a-marker preset="hiro">
+      <!-- Плоскость с вашей плиткой -->
+      <a-plane
+        material="src: url(assets/Texture_Brick.jpg); repeat: 3 2;"
+        width="0.3"
+        height="0.3"
+        rotation="-90 0 0"
+        position="0 0 0"
+      ></a-plane>
+    </a-marker>
+
+    <a-entity camera></a-entity>
+  </a-scene>
+</body>
+</html>
