@@ -1,89 +1,200 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Плитка на стену — онлайн примерка</title>
-  <style>
-    body { margin: 0; overflow: hidden; }
-    video, canvas { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; }
-    #overlay {
-      position: absolute;
-      top: 20px;
-      left: 20px;
-      background: white;
-      padding: 10px;
-      border-radius: 5px;
-      z-index: 10;
-    }
-  </style>
+    <meta charset="utf-8">
+    <title>AR Демонстрация плитки под кирпич</title>
+    <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body { 
+            margin: 0; 
+            font-family: Arial, sans-serif;
+        }
+        
+        .ui-panel {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255,255,255,0.9);
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+        
+        .texture-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .texture-option {
+            width: 80px;
+            height: 60px;
+            border: 2px solid transparent;
+            border-radius: 5px;
+            cursor: pointer;
+            background-size: cover;
+        }
+        
+        .texture-option.active {
+            border-color: #007bff;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+        
+        button {
+            padding: 8px 16px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        
+        .instruction {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            text-align: center;
+        }
+    </style>
 </head>
 <body>
-  <video id="video" autoplay playsinline></video>
-  <canvas id="canvas"></canvas>
+    <div class="instruction">
+        📱 Наведите камеру на плоскую поверхность (стену)
+    </div>
 
-  <div id="overlay">
-    <button onclick="setTile('brick1.jpg')">Коллекция 1</button>
-    <button onclick="setTile('brick2.jpg')">Коллекция 2</button>
-  </div>
+    <a-scene 
+        embedded 
+        arjs="sourceType: webcam; detectionMode: mono; matrixCodeType: 3x3;"
+        renderer="logarithmicDepthBuffer: true;"
+        vr-mode-ui="enabled: false"
+        screenshot="width: 1280; height: 720">
+        
+        <!-- Маркер для горизонтальных поверхностей -->
+        <a-entity id="wall-entity" position="0 0 0">
+            <a-plane 
+                id="brick-wall"
+                class="clickable"
+                position="0 1 -2" 
+                rotation="0 0 0" 
+                width="2.5" 
+                height="1.8" 
+                src="#defaultTexture"
+                shadow="receive: true">
+            </a-plane>
+        </a-entity>
+        
+        <a-entity camera></a-entity>
+    </a-scene>
 
-  <script>
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
+    <div class="ui-panel">
+        <div class="texture-grid" id="textureGrid">
+            <!-- Текстуры будут добавлены через JS -->
+        </div>
+        
+        <div class="controls">
+            <button onclick="rotateWall()">🔄 Повернуть</button>
+            <button onclick="scaleWall(1.1)">➕ Увеличить</button>
+            <button onclick="scaleWall(0.9)">➖ Уменьшить</button>
+            <button onclick="captureForShare()">📸 Сохранить</button>
+        </div>
+    </div>
 
-    let currentTexture = null;
-    const tileImage = new Image();
+    <script>
+        // Каталог текстур плитки
+        const brickTextures = [
+            { id: 'red_classic', name: 'Красный классический', url: 'textures/red_classic.jpg', thumb: 'textures/red_classic_thumb.jpg' },
+            { id: 'white_modern', name: 'Белый современный', url: 'textures/white_modern.jpg', thumb: 'textures/white_modern_thumb.jpg' },
+            { id: 'brown_vintage', name: 'Коричневый винтаж', url: 'textures/brown_vintage.jpg', thumb: 'textures/brown_vintage_thumb.jpg' },
+            { id: 'gray_industrial', name: 'Серый индустриальный', url: 'textures/gray_industrial.jpg', thumb: 'textures/gray_industrial_thumb.jpg' },
+            { id: 'sand_beige', name: 'Песочный бежевый', url: 'textures/sand_beige.jpg', thumb: 'textures/sand_beige_thumb.jpg' },
+            { id: 'black_premium', name: 'Черный премиум', url: 'textures/black_premium.jpg', thumb: 'textures/black_premium_thumb.jpg' }
+        ];
 
-    // Установка текстуры плитки
-    function setTile(src) {
-      tileImage.src = src;
-      tileImage.onload = () => {
-        currentTexture = tileImage;
-      };
-    }
+        let currentRotation = 0;
+        let currentScale = 1;
 
-    // Получаем доступ к камере
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-      .then(stream => {
-        video.srcObject = stream;
-        video.play();
-        video.addEventListener('loadedmetadata', () => {
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          requestAnimationFrame(draw);
-        });
-      })
-      .catch(err => {
-        alert('Камера не доступна: ' + err.message);
-      });
-
-    // Рисуем видео + текстуру
-    function draw() {
-      if (video.readyState === video.HAVE_ENOUGH_DATA) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-        if (currentTexture) {
-          // Например: накладываем плитку на центральную область 400x300px
-          const x = canvas.width / 2 - 200;
-          const y = canvas.height / 2 - 150;
-          const w = 400;
-          const h = 300;
-
-          // Рисуем прямоугольник с текстурой
-          ctx.drawImage(currentTexture, x, y, w, h);
-
-          // Опционально: добавить рамку
-          ctx.strokeStyle = 'red';
-          ctx.lineWidth = 2;
-          ctx.strokeRect(x, y, w, h);
+        // Инициализация интерфейса
+        function initUI() {
+            const textureGrid = document.getElementById('textureGrid');
+            
+            brickTextures.forEach((texture, index) => {
+                const textureOption = document.createElement('div');
+                textureOption.className = `texture-option ${index === 0 ? 'active' : ''}`;
+                textureOption.style.backgroundImage = `url(${texture.thumb})`;
+                textureOption.onclick = () => selectTexture(texture);
+                textureOption.title = texture.name;
+                
+                textureGrid.appendChild(textureOption);
+            });
         }
-      }
-      requestAnimationFrame(draw);
-    }
 
-    // Загружаем первую текстуру по умолчанию
-    setTile('Texture_Brick.jpg'); // Убедитесь, что файлы лежат рядом или по URL
-  </script>
+        function selectTexture(texture) {
+            const wall = document.getElementById('brick-wall');
+            wall.setAttribute('src', texture.url);
+            
+            // Обновляем активную текстуру в UI
+            document.querySelectorAll('.texture-option').forEach(opt => {
+                opt.classList.remove('active');
+            });
+            event.target.classList.add('active');
+        }
+
+        function rotateWall() {
+            currentRotation += 90;
+            const wall = document.getElementById('brick-wall');
+            wall.setAttribute('rotation', `0 0 ${currentRotation}`);
+        }
+
+        function scaleWall(factor) {
+            currentScale *= factor;
+            const wall = document.getElementById('brick-wall');
+            wall.setAttribute('width', 2.5 * currentScale);
+            wall.setAttribute('height', 1.8 * currentScale);
+        }
+
+        function captureForShare() {
+            const scene = document.querySelector('a-scene');
+            scene.components.screenshot.capture('perspective')
+                .then(function (data) {
+                    // Создаем временную ссылку для скачивания
+                    const link = document.createElement('a');
+                    link.download = 'my_brick_wall_design.png';
+                    link.href = data;
+                    link.click();
+                    
+                    // Можно добавить шаринг в соцсети
+                    shareImage(data);
+                });
+        }
+
+        function shareImage(imageData) {
+            // Базовая реализация шаринга
+            if (navigator.share) {
+                navigator.share({
+                    title: 'Мой дизайн стены с плиткой',
+                    text: 'Посмотрите как выглядит плитка под кирпич в моем интерьере!',
+                    url: imageData
+                });
+            }
+        }
+
+        // Инициализация при загрузке
+        window.onload = initUI;
+    </script>
 </body>
 </html>
