@@ -1,200 +1,456 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
-    <meta charset="utf-8">
-    <title>AR Демонстрация плитки под кирпич</title>
-    <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
-    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Демонстрация плитки под кирпич</title>
     <style>
-        body { 
-            margin: 0; 
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
             font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: white;
+            padding: 20px;
         }
-        
-        .ui-panel {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(255,255,255,0.9);
-            padding: 15px;
-            border-radius: 10px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            z-index: 1000;
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
         }
-        
-        .texture-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-            margin-bottom: 15px;
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
         }
-        
-        .texture-option {
-            width: 80px;
-            height: 60px;
-            border: 2px solid transparent;
-            border-radius: 5px;
-            cursor: pointer;
-            background-size: cover;
-        }
-        
-        .texture-option.active {
-            border-color: #007bff;
-        }
-        
+
         .controls {
             display: flex;
-            gap: 10px;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
             justify-content: center;
+            background: rgba(255,255,255,0.1);
+            padding: 20px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
         }
-        
-        button {
-            padding: 8px 16px;
-            background: #007bff;
-            color: white;
+
+        select, button {
+            padding: 12px 20px;
             border: none;
-            border-radius: 5px;
+            border-radius: 8px;
+            font-size: 16px;
             cursor: pointer;
+            transition: all 0.3s ease;
         }
-        
-        .instruction {
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0,0,0,0.7);
+
+        select {
+            background: white;
+            color: #333;
+            min-width: 200px;
+        }
+
+        button {
+            background: #4CAF50;
             color: white;
-            padding: 10px 20px;
-            border-radius: 5px;
+            font-weight: bold;
+        }
+
+        button:hover {
+            background: #45a049;
+            transform: translateY(-2px);
+        }
+
+        button:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .camera-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto 30px;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            background: #000;
+        }
+
+        #video, #canvas {
+            width: 100%;
+            height: 500px;
+            object-fit: cover;
+            display: block;
+        }
+
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .instructions {
+            background: rgba(255,255,255,0.1);
+            padding: 25px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .instructions h3 {
+            margin-bottom: 15px;
+            color: #fff;
+        }
+
+        .instructions ol {
+            margin-left: 20px;
+        }
+
+        .instructions li {
+            margin-bottom: 10px;
+            line-height: 1.5;
+        }
+
+        .status {
             text-align: center;
+            margin: 10px 0;
+            font-weight: bold;
+            min-height: 24px;
+        }
+
+        .wall-marker {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: rgba(255, 255, 0, 0.7);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        /* Адаптивность */
+        @media (max-width: 768px) {
+            .controls {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            select, button {
+                width: 100%;
+                max-width: 300px;
+            }
+            
+            .camera-container {
+                height: 400px;
+            }
+            
+            #video, #canvas {
+                height: 400px;
+            }
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #ffffff;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
     </style>
 </head>
 <body>
-    <div class="instruction">
-        📱 Наведите камеру на плоскую поверхность (стену)
-    </div>
-
-    <a-scene 
-        embedded 
-        arjs="sourceType: webcam; detectionMode: mono; matrixCodeType: 3x3;"
-        renderer="logarithmicDepthBuffer: true;"
-        vr-mode-ui="enabled: false"
-        screenshot="width: 1280; height: 720">
+    <div class="container">
+        <h1>Демонстрация плитки под кирпич</h1>
         
-        <!-- Маркер для горизонтальных поверхностей -->
-        <a-entity id="wall-entity" position="0 0 0">
-            <a-plane 
-                id="brick-wall"
-                class="clickable"
-                position="0 1 -2" 
-                rotation="0 0 0" 
-                width="2.5" 
-                height="1.8" 
-                src="#defaultTexture"
-                shadow="receive: true">
-            </a-plane>
-        </a-entity>
-        
-        <a-entity camera></a-entity>
-    </a-scene>
-
-    <div class="ui-panel">
-        <div class="texture-grid" id="textureGrid">
-            <!-- Текстуры будут добавлены через JS -->
-        </div>
+        <div class="status" id="status"></div>
         
         <div class="controls">
-            <button onclick="rotateWall()">🔄 Повернуть</button>
-            <button onclick="scaleWall(1.1)">➕ Увеличить</button>
-            <button onclick="scaleWall(0.9)">➖ Уменьшить</button>
-            <button onclick="captureForShare()">📸 Сохранить</button>
+            <select id="tileSelector">
+                <option value="brick_red">Красный кирпич</option>
+                <option value="brick_white">Белый кирпич</option>
+                <option value="brick_brown">Коричневый кирпич</option>
+                <option value="brick_gray">Серый кирпич</option>
+                <option value="brick_sand">Песочный кирпич</option>
+            </select>
+            
+            <button id="startCamera">Включить камеру</button>
+            <button id="captureWall" disabled>Захватить стену</button>
+            <button id="reset" disabled>Сбросить</button>
+        </div>
+
+        <div class="camera-container">
+            <video id="video" autoplay playsinline></video>
+            <canvas id="canvas"></canvas>
+            <div id="overlay" class="overlay"></div>
+        </div>
+
+        <div class="instructions">
+            <h3>Инструкция:</h3>
+            <ol>
+                <li>Нажмите "Включить камеру" и разрешите доступ к камере</li>
+                <li>Наведите камеру на стену</li>
+                <li>Нажмите "Захватить стену" когда будет видна плоскость стены</li>
+                <li>Выберите тип плитки из списка</li>
+                <li>Перемещайте камеру чтобы увидеть плитку на стене</li>
+                <li>Используйте кнопку "Сбросить" для выбора другой стены</li>
+            </ol>
         </div>
     </div>
 
     <script>
-        // Каталог текстур плитки
-        const brickTextures = [
-            { id: 'red_classic', name: 'Красный классический', url: 'textures/red_classic.jpg', thumb: 'textures/red_classic_thumb.jpg' },
-            { id: 'white_modern', name: 'Белый современный', url: 'textures/white_modern.jpg', thumb: 'textures/white_modern_thumb.jpg' },
-            { id: 'brown_vintage', name: 'Коричневый винтаж', url: 'textures/brown_vintage.jpg', thumb: 'textures/brown_vintage_thumb.jpg' },
-            { id: 'gray_industrial', name: 'Серый индустриальный', url: 'textures/gray_industrial.jpg', thumb: 'textures/gray_industrial_thumb.jpg' },
-            { id: 'sand_beige', name: 'Песочный бежевый', url: 'textures/sand_beige.jpg', thumb: 'textures/sand_beige_thumb.jpg' },
-            { id: 'black_premium', name: 'Черный премиум', url: 'textures/black_premium.jpg', thumb: 'textures/black_premium_thumb.jpg' }
-        ];
-
-        let currentRotation = 0;
-        let currentScale = 1;
-
-        // Инициализация интерфейса
-        function initUI() {
-            const textureGrid = document.getElementById('textureGrid');
-            
-            brickTextures.forEach((texture, index) => {
-                const textureOption = document.createElement('div');
-                textureOption.className = `texture-option ${index === 0 ? 'active' : ''}`;
-                textureOption.style.backgroundImage = `url(${texture.thumb})`;
-                textureOption.onclick = () => selectTexture(texture);
-                textureOption.title = texture.name;
+        class TileARViewer {
+            constructor() {
+                this.video = document.getElementById('video');
+                this.canvas = document.getElementById('canvas');
+                this.overlay = document.getElementById('overlay');
+                this.ctx = this.canvas.getContext('2d');
+                this.tileSelector = document.getElementById('tileSelector');
+                this.status = document.getElementById('status');
                 
-                textureGrid.appendChild(textureOption);
-            });
-        }
-
-        function selectTexture(texture) {
-            const wall = document.getElementById('brick-wall');
-            wall.setAttribute('src', texture.url);
+                this.isCameraActive = false;
+                this.isWallCaptured = false;
+                this.wallCorners = null;
+                this.currentTile = null;
+                this.markers = [];
+                
+                this.tileTextures = {
+                    brick_red: this.createBrickTexture('#c1443a', '#a6362e'),
+                    brick_white: this.createBrickTexture('#f0f0f0', '#d9d9d9'),
+                    brick_brown: this.createBrickTexture('#8B4513', '#654321'),
+                    brick_gray: this.createBrickTexture('#808080', '#696969'),
+                    brick_sand: this.createBrickTexture('#e3c9a5', '#c9b18e')
+                };
+                
+                this.initializeEventListeners();
+                this.updateStatus('Нажмите "Включить камеру" для начала работы');
+            }
             
-            // Обновляем активную текстуру в UI
-            document.querySelectorAll('.texture-option').forEach(opt => {
-                opt.classList.remove('active');
-            });
-            event.target.classList.add('active');
-        }
-
-        function rotateWall() {
-            currentRotation += 90;
-            const wall = document.getElementById('brick-wall');
-            wall.setAttribute('rotation', `0 0 ${currentRotation}`);
-        }
-
-        function scaleWall(factor) {
-            currentScale *= factor;
-            const wall = document.getElementById('brick-wall');
-            wall.setAttribute('width', 2.5 * currentScale);
-            wall.setAttribute('height', 1.8 * currentScale);
-        }
-
-        function captureForShare() {
-            const scene = document.querySelector('a-scene');
-            scene.components.screenshot.capture('perspective')
-                .then(function (data) {
-                    // Создаем временную ссылку для скачивания
-                    const link = document.createElement('a');
-                    link.download = 'my_brick_wall_design.png';
-                    link.href = data;
-                    link.click();
+            initializeEventListeners() {
+                document.getElementById('startCamera').addEventListener('click', () => this.startCamera());
+                document.getElementById('captureWall').addEventListener('click', () => this.captureWall());
+                document.getElementById('reset').addEventListener('click', () => this.reset());
+                this.tileSelector.addEventListener('change', (e) => this.changeTile(e.target.value));
+                
+                // Обработка кликов для определения углов стены
+                this.canvas.addEventListener('click', (e) => this.handleCanvasClick(e));
+            }
+            
+            updateStatus(message) {
+                this.status.textContent = message;
+            }
+            
+            async startCamera() {
+                try {
+                    this.updateStatus('Запрос доступа к камере...');
+                    const stream = await navigator.mediaDevices.getUserMedia({ 
+                        video: { 
+                            facingMode: 'environment',
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 }
+                        } 
+                    });
                     
-                    // Можно добавить шаринг в соцсети
-                    shareImage(data);
-                });
-        }
-
-        function shareImage(imageData) {
-            // Базовая реализация шаринга
-            if (navigator.share) {
-                navigator.share({
-                    title: 'Мой дизайн стены с плиткой',
-                    text: 'Посмотрите как выглядит плитка под кирпич в моем интерьере!',
-                    url: imageData
-                });
+                    this.video.srcObject = stream;
+                    this.isCameraActive = true;
+                    
+                    // Ждем загрузки видео
+                    this.video.addEventListener('loadedmetadata', () => {
+                        this.canvas.width = this.video.videoWidth;
+                        this.canvas.height = this.video.videoHeight;
+                        this.startRendering();
+                        document.getElementById('captureWall').disabled = false;
+                        document.getElementById('reset').disabled = false;
+                        this.updateStatus('Камера активна. Нажмите на 4 точки по углам стены, затем нажмите "Захватить стену"');
+                    });
+                    
+                } catch (error) {
+                    console.error('Ошибка доступа к камере:', error);
+                    this.updateStatus('Ошибка: Не удалось получить доступ к камере. Проверьте разрешения.');
+                    alert('Не удалось получить доступ к камере. Проверьте разрешения.');
+                }
+            }
+            
+            handleCanvasClick(e) {
+                if (!this.isCameraActive || this.isWallCaptured) return;
+                
+                const rect = this.canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                // Создаем маркер
+                const marker = document.createElement('div');
+                marker.className = 'wall-marker';
+                marker.style.left = `${x}px`;
+                marker.style.top = `${y}px`;
+                this.overlay.appendChild(marker);
+                this.markers.push({x, y});
+                
+                if (this.markers.length === 4) {
+                    this.updateStatus('Нажмите "Захватить стену" для применения плитки');
+                } else {
+                    this.updateStatus(`Отметьте точку ${this.markers.length + 1} из 4`);
+                }
+            }
+            
+            captureWall() {
+                if (!this.isCameraActive) {
+                    alert('Сначала включите камеру!');
+                    return;
+                }
+                
+                if (this.markers.length < 4) {
+                    alert('Отметьте 4 точки по углам стены!');
+                    return;
+                }
+                
+                this.wallCorners = this.markers;
+                this.isWallCaptured = true;
+                this.changeTile(this.tileSelector.value);
+                this.updateStatus('Стена захвачена! Выберите тип плитки из списка.');
+            }
+            
+            reset() {
+                this.isWallCaptured = false;
+                this.wallCorners = null;
+                this.currentTile = null;
+                this.markers = [];
+                
+                // Удаляем все маркеры
+                while (this.overlay.firstChild) {
+                    this.overlay.removeChild(this.overlay.firstChild);
+                }
+                
+                this.updateStatus('Нажмите на 4 точки по углам стены, затем нажмите "Захватить стену"');
+            }
+            
+            changeTile(tileType) {
+                if (!this.isWallCaptured) {
+                    alert('Сначала захватите стену!');
+                    return;
+                }
+                
+                this.currentTile = this.tileTextures[tileType];
+                this.updateStatus(`Применена плитка: ${document.getElementById('tileSelector').options[document.getElementById('tileSelector').selectedIndex].text}`);
+            }
+            
+            createBrickTexture(primaryColor, secondaryColor) {
+                const textureCanvas = document.createElement('canvas');
+                textureCanvas.width = 200;
+                textureCanvas.height = 100;
+                const textureCtx = textureCanvas.getContext('2d');
+                
+                // Основной цвет
+                textureCtx.fillStyle = primaryColor;
+                textureCtx.fillRect(0, 0, 200, 100);
+                
+                // Швы между кирпичами
+                textureCtx.fillStyle = secondaryColor;
+                
+                // Горизонтальные швы
+                for (let y = 0; y < 100; y += 10) {
+                    textureCtx.fillRect(0, y, 200, 2);
+                }
+                
+                // Вертикальные швы (со смещением в шахматном порядке)
+                for (let x = 0; x < 200; x += 50) {
+                    const offset = (x / 50) % 2 === 0 ? 0 : 5;
+                    for (let y = offset; y < 100; y += 10) {
+                        textureCtx.fillRect(x, y, 2, 5);
+                    }
+                }
+                
+                // Добавляем текстуру для реалистичности
+                textureCtx.globalAlpha = 0.1;
+                textureCtx.fillStyle = '#000000';
+                for (let i = 0; i < 100; i++) {
+                    const x = Math.random() * 200;
+                    const y = Math.random() * 100;
+                    const size = Math.random() * 3 + 1;
+                    textureCtx.fillRect(x, y, size, size);
+                }
+                
+                return textureCanvas;
+            }
+            
+            drawTileOnWall() {
+                if (!this.isWallCaptured || !this.currentTile) return;
+                
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                
+                // Рисуем видео
+                this.ctx.drawImage(this.video, 0, 0, this.canvas.width, this.canvas.height);
+                
+                // Создаем паттерн из текстуры
+                const pattern = this.ctx.createPattern(this.currentTile, 'repeat');
+                
+                // Рисуем плитку на захваченной области стены
+                this.ctx.save();
+                
+                // Создаем путь для области стены
+                this.ctx.beginPath();
+                this.ctx.moveTo(this.wallCorners[0].x, this.wallCorners[0].y);
+                for (let i = 1; i < this.wallCorners.length; i++) {
+                    this.ctx.lineTo(this.wallCorners[i].x, this.wallCorners[i].y);
+                }
+                this.ctx.closePath();
+                
+                // Применяем текстуру
+                this.ctx.fillStyle = pattern;
+                this.ctx.fill();
+                
+                // Добавляем легкую тень для объема
+                this.ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+                this.ctx.lineWidth = 3;
+                this.ctx.stroke();
+                
+                this.ctx.restore();
+            }
+            
+            startRendering() {
+                const render = () => {
+                    if (this.isCameraActive) {
+                        if (this.isWallCaptured && this.currentTile) {
+                            this.drawTileOnWall();
+                        } else {
+                            // Просто показываем видео
+                            this.ctx.drawImage(this.video, 0, 0, this.canvas.width, this.canvas.height);
+                        }
+                    }
+                    requestAnimationFrame(render);
+                };
+                render();
             }
         }
 
-        // Инициализация при загрузке
-        window.onload = initUI;
+        // Инициализация при загрузке страницы
+        document.addEventListener('DOMContentLoaded', () => {
+            new TileARViewer();
+        });
+
+        // Обработка ошибок камеры
+        window.addEventListener('error', (e) => {
+            console.error('Global error:', e.error);
+        });
     </script>
 </body>
 </html>
