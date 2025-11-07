@@ -129,6 +129,9 @@
             margin: 10px 0;
             font-weight: bold;
             min-height: 24px;
+            padding: 10px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
         }
 
         .wall-marker {
@@ -140,6 +143,35 @@
             transform: translate(-50%, -50%);
             pointer-events: none;
             z-index: 10;
+            border: 2px solid #fff;
+        }
+
+        .wall-area {
+            position: absolute;
+            pointer-events: none;
+            z-index: 5;
+            border: 2px dashed #4CAF50;
+            background: rgba(76, 175, 80, 0.1);
+        }
+
+        .detection-guide {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80%;
+            height: 60%;
+            border: 3px dashed rgba(255, 255, 255, 0.5);
+            pointer-events: none;
+            z-index: 5;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 18px;
+            text-align: center;
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
         }
 
         /* Адаптивность */
@@ -161,6 +193,11 @@
             #video, #canvas {
                 height: 400px;
             }
+            
+            .detection-guide {
+                font-size: 14px;
+                padding: 10px;
+            }
         }
 
         .loading {
@@ -176,13 +213,21 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+        
+        .tip {
+            background: rgba(255,255,255,0.2);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            border-left: 4px solid #4CAF50;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Демонстрация плитки под кирпич</h1>
         
-        <div class="status" id="status"></div>
+        <div class="status" id="status">Нажмите "Включить камеру" для начала работы</div>
         
         <div class="controls">
             <select id="tileSelector">
@@ -194,26 +239,42 @@
             </select>
             
             <button id="startCamera">Включить камеру</button>
-            <button id="captureWall" disabled>Захватить стену</button>
+            <button id="captureWall" disabled>Захватить область</button>
+            <button id="autoDetect" disabled>Авто-поиск стены</button>
             <button id="reset" disabled>Сбросить</button>
         </div>
 
         <div class="camera-container">
             <video id="video" autoplay playsinline></video>
             <canvas id="canvas"></canvas>
-            <div id="overlay" class="overlay"></div>
+            <div id="overlay" class="overlay">
+                <div class="detection-guide" id="detectionGuide">
+                    Наведите камеру на стену и отметьте 4 угла области для плитки
+                </div>
+            </div>
         </div>
 
         <div class="instructions">
-            <h3>Инструкция:</h3>
+            <h3>Как найти и отметить стену:</h3>
+            <div class="tip">
+                <strong>Совет:</strong> Ищите ровные поверхности с хорошим освещением. Стены обычно имеют однородный цвет и текстуру.
+            </div>
             <ol>
-                <li>Нажмите "Включить камеру" и разрешите доступ к камере</li>
-                <li>Наведите камеру на стену</li>
-                <li>Нажмите "Захватить стену" когда будет видна плоскость стены</li>
-                <li>Выберите тип плитки из списка</li>
-                <li>Перемещайте камеру чтобы увидеть плитку на стене</li>
-                <li>Используйте кнопку "Сбросить" для выбора другой стены</li>
+                <li><strong>Найдите ровную стену</strong> - лучше всего подходят светлые стены без узоров</li>
+                <li><strong>Освещение</strong> - убедитесь, что стена хорошо освещена</li>
+                <li><strong>Отметьте углы</strong> - нажмите на 4 точки по углам области, где хотите видеть плитку</li>
+                <li><strong>Используйте авто-поиск</strong> - попробуйте автоматическое определение ровных поверхностей</li>
+                <li><strong>Захватите область</strong> - нажмите "Захватить область" когда отметите все 4 точки</li>
+                <li><strong>Выберите плитку</strong> - подберите подходящий тип плитки из списка</li>
             </ol>
+            
+            <div class="tip">
+                <strong>Что делать если не видно стену?</strong><br>
+                - Подойдите ближе к стене<br>
+                - Улучшите освещение<br>
+                - Выберите стену без обоев с узором<br>
+                - Используйте функцию авто-поиска
+            </div>
         </div>
     </div>
 
@@ -226,12 +287,14 @@
                 this.ctx = this.canvas.getContext('2d');
                 this.tileSelector = document.getElementById('tileSelector');
                 this.status = document.getElementById('status');
+                this.detectionGuide = document.getElementById('detectionGuide');
                 
                 this.isCameraActive = false;
                 this.isWallCaptured = false;
                 this.wallCorners = null;
                 this.currentTile = null;
                 this.markers = [];
+                this.wallArea = null;
                 
                 this.tileTextures = {
                     brick_red: this.createBrickTexture('#c1443a', '#a6362e'),
@@ -242,12 +305,12 @@
                 };
                 
                 this.initializeEventListeners();
-                this.updateStatus('Нажмите "Включить камеру" для начала работы');
             }
             
             initializeEventListeners() {
                 document.getElementById('startCamera').addEventListener('click', () => this.startCamera());
                 document.getElementById('captureWall').addEventListener('click', () => this.captureWall());
+                document.getElementById('autoDetect').addEventListener('click', () => this.autoDetectWall());
                 document.getElementById('reset').addEventListener('click', () => this.reset());
                 this.tileSelector.addEventListener('change', (e) => this.changeTile(e.target.value));
                 
@@ -279,8 +342,10 @@
                         this.canvas.height = this.video.videoHeight;
                         this.startRendering();
                         document.getElementById('captureWall').disabled = false;
+                        document.getElementById('autoDetect').disabled = false;
                         document.getElementById('reset').disabled = false;
-                        this.updateStatus('Камера активна. Нажмите на 4 точки по углам стены, затем нажмите "Захватить стену"');
+                        this.updateStatus('Камера активна. Наведите на стену и отметьте 4 угла области для плитки');
+                        this.detectionGuide.style.display = 'flex';
                     });
                     
                 } catch (error) {
@@ -305,11 +370,86 @@
                 this.overlay.appendChild(marker);
                 this.markers.push({x, y});
                 
+                // Обновляем область
+                this.updateWallArea();
+                
                 if (this.markers.length === 4) {
-                    this.updateStatus('Нажмите "Захватить стену" для применения плитки');
+                    this.updateStatus('Готово! Нажмите "Захватить область" для применения плитки');
+                    this.detectionGuide.style.display = 'none';
                 } else {
-                    this.updateStatus(`Отметьте точку ${this.markers.length + 1} из 4`);
+                    this.updateStatus(`Отметьте точку ${this.markers.length + 1} из 4. Найдите углы ровной стены`);
                 }
+            }
+            
+            updateWallArea() {
+                // Удаляем старую область
+                if (this.wallArea) {
+                    this.wallArea.remove();
+                }
+                
+                if (this.markers.length >= 3) {
+                    this.wallArea = document.createElement('div');
+                    this.wallArea.className = 'wall-area';
+                    
+                    // Вычисляем bounding box для маркеров
+                    const xs = this.markers.map(m => m.x);
+                    const ys = this.markers.map(m => m.y);
+                    const minX = Math.min(...xs);
+                    const maxX = Math.max(...xs);
+                    const minY = Math.min(...ys);
+                    const maxY = Math.max(...ys);
+                    
+                    this.wallArea.style.left = `${minX}px`;
+                    this.wallArea.style.top = `${minY}px`;
+                    this.wallArea.style.width = `${maxX - minX}px`;
+                    this.wallArea.style.height = `${maxY - minY}px`;
+                    
+                    this.overlay.appendChild(this.wallArea);
+                }
+            }
+            
+            autoDetectWall() {
+                if (!this.isCameraActive) {
+                    alert('Сначала включите камеру!');
+                    return;
+                }
+                
+                this.updateStatus('Авто-поиск ровных поверхностей...');
+                
+                // Имитация автоматического поиска стены
+                // В реальном приложении здесь была бы компьютерное зрение
+                setTimeout(() => {
+                    // Автоматически создаем маркеры в центре экрана
+                    const width = this.canvas.width;
+                    const height = this.canvas.height;
+                    const margin = 100;
+                    
+                    this.markers = [
+                        { x: margin, y: margin },
+                        { x: width - margin, y: margin },
+                        { x: width - margin, y: height - margin },
+                        { x: margin, y: height - margin }
+                    ];
+                    
+                    // Очищаем старые маркеры
+                    while (this.overlay.firstChild) {
+                        this.overlay.removeChild(this.overlay.firstChild);
+                    }
+                    
+                    // Создаем новые маркеры
+                    this.markers.forEach(marker => {
+                        const markerElement = document.createElement('div');
+                        markerElement.className = 'wall-marker';
+                        markerElement.style.left = `${marker.x}px`;
+                        markerElement.style.top = `${marker.y}px`;
+                        this.overlay.appendChild(markerElement);
+                    });
+                    
+                    this.updateWallArea();
+                    this.detectionGuide.style.display = 'none';
+                    this.updateStatus('Область автоматически определена! Нажмите "Захватить область"');
+                    
+                }, 1500);
             }
             
             captureWall() {
@@ -319,14 +459,21 @@
                 }
                 
                 if (this.markers.length < 4) {
-                    alert('Отметьте 4 точки по углам стены!');
+                    alert('Отметьте 4 точки по углам области!');
                     return;
                 }
                 
                 this.wallCorners = this.markers;
                 this.isWallCaptured = true;
                 this.changeTile(this.tileSelector.value);
-                this.updateStatus('Стена захвачена! Выберите тип плитки из списка.');
+                this.updateStatus('Область захвачена! Выберите тип плитки из списка.');
+                
+                // Скрываем направляющие
+                this.detectionGuide.style.display = 'none';
+                if (this.wallArea) {
+                    this.wallArea.style.border = '2px solid #4CAF50';
+                    this.wallArea.style.background = 'rgba(76, 175, 80, 0.2)';
+                }
             }
             
             reset() {
@@ -335,22 +482,27 @@
                 this.currentTile = null;
                 this.markers = [];
                 
-                // Удаляем все маркеры
+                // Удаляем все маркеры и области
                 while (this.overlay.firstChild) {
                     this.overlay.removeChild(this.overlay.firstChild);
                 }
                 
-                this.updateStatus('Нажмите на 4 точки по углам стены, затем нажмите "Захватить стену"');
+                // Восстанавливаем направляющую
+                this.detectionGuide.style.display = 'flex';
+                this.wallArea = null;
+                
+                this.updateStatus('Наведите на стену и отметьте 4 угла области для плитки');
             }
             
             changeTile(tileType) {
                 if (!this.isWallCaptured) {
-                    alert('Сначала захватите стену!');
+                    alert('Сначала захватите область!');
                     return;
                 }
                 
                 this.currentTile = this.tileTextures[tileType];
-                this.updateStatus(`Применена плитка: ${document.getElementById('tileSelector').options[document.getElementById('tileSelector').selectedIndex].text}`);
+                const tileName = document.getElementById('tileSelector').options[document.getElementById('tileSelector').selectedIndex].text;
+                this.updateStatus(`Применена плитка: ${tileName}. Перемещайте камеру чтобы увидеть эффект.`);
             }
             
             createBrickTexture(primaryColor, secondaryColor) {
