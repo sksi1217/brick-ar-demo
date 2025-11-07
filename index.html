@@ -1,67 +1,93 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
-  <meta charset="utf-8">
-  <title>Плитка под кирпич — AR демо</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Плитка под кирпич — примерка</title>
   <style>
-    body { margin: 0; overflow: hidden; }
-    .arjs-loader {
-      height: 100%;
-      width: 100%;
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #000;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+      color: white;
+    }
+    #video {
       position: absolute;
       top: 0;
       left: 0;
-      background-color: rgba(0, 0, 0, 0.8);
-      z-index: 9999;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      color: white;
-      font-family: sans-serif;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: 1;
+    }
+    #overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-size: 200px 200px; /* регулируйте под вашу плитку */
+      background-image: url('Texture_Brick.jpg');
+      mix-blend-mode: overlay;
+      opacity: 0.9;
+      z-index: 2;
+      pointer-events: none;
+    }
+    #instructions {
+      position: absolute;
+      bottom: 20px;
+      left: 0;
+      width: 100%;
+      text-align: center;
+      padding: 12px;
+      background: rgba(0, 0, 0, 0.6);
+      z-index: 3;
+      font-size: 16px;
+    }
+    #error {
+      position: absolute;
+      top: 0;
+      width: 100%;
+      padding: 20px;
+      text-align: center;
+      background: rgba(200, 0, 0, 0.8);
+      z-index: 10;
+      display: none;
     }
   </style>
 </head>
 <body>
-  <div class="arjs-loader">Загрузка AR... Наведите камеру на маркер</div>
-
-  <!-- AR.js подключение -->
-  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-nft.js"></script>
-
-  <!-- Ваша сцена -->
-  <a-scene
-    vr-mode-ui="enabled: false"
-    renderer="logarithmicDepthBuffer: true;"
-    arjs="sourceType: webcam; debugUIEnabled: false;"
-  >
-    <!-- NFT-маркер -->
-    <a-nft
-      type="nft"
-      url="nft/marker" <!-- без расширений! -->
-      smooth="true"
-      smoothCount="10"
-      smoothTolerance="0.01"
-      smoothThreshold="0.01"
-    >
-      <!-- Плоскость с вашей плиткой -->
-      <a-plane
-        material="src: url(assets/Texture_Brick.jpg); repeat: 2 2;"
-        width="1"
-        height="1"
-        rotation="-90 0 0"
-        position="0 0 0"
-      ></a-plane>
-    </a-nft>
-
-    <a-entity camera></a-entity>
-  </a-scene>
+  <div id="error">Ошибка: камера не доступна</div>
+  <video id="video" autoplay playsinline muted></video>
+  <div id="overlay"></div>
+  <div id="instructions">Наведите камеру на стену, чтобы увидеть плитку</div>
 
   <script>
-    // Скрыть лоадер после загрузки
-    document.addEventListener('DOMContentLoaded', () => {
-      setTimeout(() => {
-        document.querySelector('.arjs-loader').style.display = 'none';
-      }, 2000);
-    });
+    const video = document.getElementById('video');
+    const errorDiv = document.getElementById('error');
+
+    // Запросить видеопоток с камеры
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      .then(stream => {
+        video.srcObject = stream;
+      })
+      .catch(err => {
+        console.error('Камера не доступна:', err);
+        errorDiv.style.display = 'block';
+        errorDiv.textContent = 'Не удалось получить доступ к камере. Попробуйте в Chrome или Safari.';
+      });
+
+    // Подгрузка текстуры (необязательно, но для контроля ошибок)
+    const img = new Image();
+    img.src = 'Texture_Brick.jpg';
+    img.onload = () => {
+      document.getElementById('overlay').style.backgroundImage = `url(${img.src})`;
+    };
+    img.onerror = () => {
+      console.error('Не найдена текстура: Texture_Brick.jpg');
+      document.getElementById('overlay').style.background = 'rgba(150, 75, 0, 0.5)'; // fallback — коричневый оверлей
+    };
   </script>
 </body>
 </html>
